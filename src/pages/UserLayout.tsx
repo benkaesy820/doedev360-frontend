@@ -160,7 +160,7 @@ export function UserLayout() {
           </aside>
 
           {/* Main Content */}
-          <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col pb-[calc(60px+env(safe-area-inset-bottom))] sm:pb-0">
+          <main className="flex-1 min-h-0 overflow-hidden flex flex-col pb-[calc(60px+env(safe-area-inset-bottom))] sm:pb-0">
             <Outlet />
           </main>
 

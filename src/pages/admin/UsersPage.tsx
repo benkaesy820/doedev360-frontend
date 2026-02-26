@@ -462,7 +462,7 @@ export function UsersPage() {
         <CardSkeleton />
       ) : (
         <ScrollArea className="flex-1 bg-background">
-          <div className="flex flex-col pb-[calc(1rem+env(safe-area-inset-bottom)+4rem)] sm:pb-6 px-4 sm:px-0">
+          <div className="flex flex-col pb-6 px-4 sm:px-0">
             {allUsers.length === 0 ? (
               <div className="flex flex-col items-center gap-4 py-24 text-muted-foreground">
                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">

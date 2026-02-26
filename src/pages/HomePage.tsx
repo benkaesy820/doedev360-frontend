@@ -188,7 +188,7 @@ export function HomePage() {
   return (
     <div className={cn('flex flex-col', !isInsideLayout && 'h-screen bg-background')}>
       {!isInsideLayout && <AppHeader />}
-      <div className={cn(!isInsideLayout && 'flex-1 overflow-auto')}>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div className="max-w-5xl mx-auto p-4 sm:p-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Main column */}
