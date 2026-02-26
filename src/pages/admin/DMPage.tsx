@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Crown, Shield, MessageCircle, Menu } from 'lucide-react'
+import { Crown, Shield, MessageCircle, Menu, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -27,8 +27,44 @@ export function DMPage() {
   const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN'
 
   const [selectedId, setSelectedId] = useState<string | null>(searchParams.get('partner'))
-  const [mobileOpen, setMobileOpen] = useState(!searchParams.get('partner'))
+  const isMobile = typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  const [mobileOpen, setMobileOpen] = useState(!searchParams.get('partner') && isMobile)
   const setReplyTo = useChatStore(s => s.setReplyTo)
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set())
+
+  // Fix: Clear global reply state when leaving DM page
+  useEffect(() => {
+    return () => setReplyTo(null)
+  }, [setReplyTo])
+
+  // Fix: Handle resize properly to toggle mobile modal safely
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768) {
+        setMobileOpen(false)
+      } else if (!searchParams.get('partner')) {
+        setMobileOpen(true)
+      }
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [searchParams])
+
+  // Fix: Track ALL online users globally for the contact list
+  useEffect(() => {
+    const socket = getSocket()
+    if (!socket) return
+    const handleOnline = (data: { userId: string }) => setOnlineUsers(prev => new Set(prev).add(data.userId))
+    const handleOffline = (data: { userId: string }) => {
+      setOnlineUsers(prev => { const next = new Set(prev); next.delete(data.userId); return next })
+    }
+    socket.on('user:online', handleOnline)
+    socket.on('user:offline', handleOffline)
+    return () => {
+      socket.off('user:online', handleOnline)
+      socket.off('user:offline', handleOffline)
+    }
+  }, [])
 
   const { data: convosData, isLoading: convosLoading } = useDMConversations()
   const { data: adminListData } = useAdminList()
@@ -81,7 +117,7 @@ export function DMPage() {
 
   const [partnerTyping, setPartnerTyping] = useState(false)
   const partnerTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [isPartnerOnline, setIsPartnerOnline] = useState(false)
+  const isPartnerOnline = partner ? onlineUsers.has(partner.id) : false
 
   useEffect(() => {
     if (!selectedId) return
@@ -95,16 +131,10 @@ export function DMPage() {
         partnerTypingTimerRef.current = setTimeout(() => setPartnerTyping(false), 4000)
       }
     }
-    const handleOnline = (data: { userId: string }) => { if (data.userId === selectedId) setIsPartnerOnline(true) }
-    const handleOffline = (data: { userId: string }) => { if (data.userId === selectedId) setIsPartnerOnline(false) }
 
     socket.on('dm:typing', handler)
-    socket.on('user:online', handleOnline)
-    socket.on('user:offline', handleOffline)
     return () => {
       socket.off('dm:typing', handler)
-      socket.off('user:online', handleOnline)
-      socket.off('user:offline', handleOffline)
     }
   }, [selectedId])
 
@@ -159,13 +189,18 @@ export function DMPage() {
                   : 'hover:bg-accent/50 text-foreground',
               )}
             >
-              <div className={cn(
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold',
-                conv.partner.role === 'SUPER_ADMIN'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-primary/20 text-primary',
-              )}>
-                {getInitials(conv.partner.name)}
+              <div className="relative">
+                <div className={cn(
+                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold',
+                  conv.partner.role === 'SUPER_ADMIN'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-primary/20 text-primary',
+                )}>
+                  {getInitials(conv.partner.name)}
+                </div>
+                {onlineUsers.has(conv.partner.id) && (
+                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-green-500" />
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1">
@@ -198,13 +233,18 @@ export function DMPage() {
                       : 'hover:bg-accent/50 text-foreground',
                   )}
                 >
-                  <div className={cn(
-                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold',
-                    admin.role === 'SUPER_ADMIN'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-primary/20 text-primary',
-                  )}>
-                    {getInitials(admin.name)}
+                  <div className="relative">
+                    <div className={cn(
+                      'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold',
+                      admin.role === 'SUPER_ADMIN'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-primary/20 text-primary',
+                    )}>
+                      {getInitials(admin.name)}
+                    </div>
+                    {onlineUsers.has(admin.id) && (
+                      <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-green-500" />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1">
@@ -264,7 +304,7 @@ export function DMPage() {
             >
               <Menu className="h-4 w-4" />
             </button>
-            {messagesQuery.isLoading ? (
+            {messagesQuery.isLoading || convosLoading || !adminListData ? (
               <Skeleton className="h-8 w-48" />
             ) : partner ? (
               <>
@@ -291,14 +331,20 @@ export function DMPage() {
                   <p className="text-[11px] text-muted-foreground">{partnerTyping ? 'typing...' : 'Direct Message'}</p>
                 </div>
               </>
+            ) : selectedId ? (
+              <div className="flex items-center gap-2">
+                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-bold">
+                  <Users className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold">User not found</p>
+                  <p className="text-[11px] text-muted-foreground">Admin no longer exists or invalid ID</p>
+                </div>
+              </div>
             ) : (
               <div className="flex items-center gap-2">
                 <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary text-sm font-bold">
-                  {partner ? getInitials(partner.name) : <MessageCircle className="h-4 w-4" />}
-                  <span className={cn(
-                    'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background',
-                    isPartnerOnline ? 'bg-green-500' : 'bg-muted-foreground'
-                  )} />
+                  <MessageCircle className="h-4 w-4" />
                 </div>
                 <div>
                   <p className="text-sm font-bold">New Conversation</p>
