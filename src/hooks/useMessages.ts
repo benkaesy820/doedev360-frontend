@@ -125,6 +125,14 @@ export function useSendMessage(conversationId: string | undefined) {
       if (!convId) {
         const res = await api.create()
         convId = res.conversation.id
+
+        // Move the optimistic message from the undefined cache to the new conversation cache
+        const tempMsgs = queryClient.getQueryData(['messages', undefined])
+        if (tempMsgs) {
+          queryClient.setQueryData(['messages', convId], tempMsgs)
+          queryClient.removeQueries({ queryKey: ['messages', undefined] })
+        }
+
         queryClient.setQueryData(['conversation'], { success: true, conversation: res.conversation })
       }
 
@@ -192,13 +200,13 @@ export function useSendMessage(conversationId: string | undefined) {
       const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`
       tempIdRef.current = tempId
 
-      if (!conversationId || !user) return { tempId }
+      if (!user) return { tempId }
 
       await queryClient.cancelQueries({ queryKey: ['messages', conversationId] })
 
       const optimisticMessage: Message = {
         id: tempId,
-        conversationId,
+        conversationId: conversationId || '',
         senderId: user.id,
         sender: { id: user.id, name: user.name, role: user.role },
         type: data.type as Message['type'],
@@ -215,7 +223,11 @@ export function useSendMessage(conversationId: string | undefined) {
       queryClient.setQueryData<{ pages: Array<{ success: boolean; messages: Message[]; hasMore: boolean }> }>(
         ['messages', conversationId],
         (old) => {
-          if (!old) return old
+          if (!old) {
+            return {
+              pages: [{ success: true, messages: [optimisticMessage], hasMore: false }]
+            }
+          }
           // Append to FIRST page (most recent) — matches message:new handler
           const firstPage = old.pages[0]
           return {

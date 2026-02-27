@@ -85,7 +85,7 @@ export function AppHeader() {
         <nav className="flex items-center gap-0 sm:gap-1">
           <NavLink
             active={isAdmin ? location.pathname.startsWith('/admin') || location.pathname === '/' : location.pathname.startsWith('/home')}
-            onClick={() => navigate(isAdmin ? '/admin' : '/home')}
+            onClick={() => navigate(isAdmin ? '/admin/home' : '/home')}
           >
             <Home className="h-4 w-4 shrink-0" />
             <span className="hidden lg:inline">Home</span>

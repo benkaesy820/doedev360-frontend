@@ -82,6 +82,7 @@ export function connectSocket(): AppSocket {
   socket = io(SOCKET_URL, {
     transports: ['websocket', 'polling'],
     withCredentials: true,
+    auth: { token: localStorage.getItem('wighaven_user_token') },
     upgrade: true,
     reconnection: true,
     reconnectionDelay: 1000,

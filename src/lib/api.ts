@@ -41,6 +41,21 @@ class ApiError extends Error {
 
 let memoryCsrfToken: string | null = null
 
+function getAuthToken(): string | null {
+  try {
+    return localStorage.getItem('wighaven_user_token')
+  } catch {
+    return null
+  }
+}
+
+function setAuthToken(token: string | null) {
+  try {
+    if (token) localStorage.setItem('wighaven_user_token', token)
+    else localStorage.removeItem('wighaven_user_token')
+  } catch { }
+}
+
 function getCsrfToken(): string | null {
   if (memoryCsrfToken) return memoryCsrfToken
   const match = document.cookie.match(/(?:^|;\s*)_csrf=([^;]*)/)
@@ -88,6 +103,10 @@ async function requestOnce(
     const csrf = getCsrfToken()
     if (csrf) headers['x-csrf-token'] = csrf
   }
+  const token = getAuthToken()
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
   return fetch(url, { ...options, credentials: 'include', headers })
 }
 
@@ -118,8 +137,16 @@ async function request<T>(
   if (res.status === 204) return undefined as T
 
   const data = await res.json()
-  if (data && typeof data === 'object' && 'csrfToken' in data && typeof data.csrfToken === 'string') {
-    memoryCsrfToken = data.csrfToken
+  if (data && typeof data === 'object') {
+    if ('csrfToken' in data && typeof data.csrfToken === 'string') {
+      memoryCsrfToken = data.csrfToken
+    }
+    if ('token' in data && typeof data.token === 'string' && isAuthPath && (path === '/auth/login' || path === '/auth/refresh' || path === '/auth/password/change')) {
+      setAuthToken(data.token)
+    }
+    if (isAuthPath && (path === '/auth/logout' || path === '/auth/sessions/revoke-all')) {
+      setAuthToken(null)
+    }
   }
   return data
 }

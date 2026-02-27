@@ -186,7 +186,7 @@ export function HomePage() {
   const pendingCount = stats?.users.pending ?? 0
 
   return (
-    <div className={cn('flex flex-col', !isInsideLayout && 'h-screen bg-background')}>
+    <div className={cn('flex flex-col', isInsideLayout ? 'h-full' : 'h-screen bg-background')}>
       {!isInsideLayout && <AppHeader />}
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div className="max-w-5xl mx-auto p-4 sm:p-6">
