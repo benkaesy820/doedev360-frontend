@@ -39,7 +39,10 @@ class ApiError extends Error {
   }
 }
 
+let memoryCsrfToken: string | null = null
+
 function getCsrfToken(): string | null {
+  if (memoryCsrfToken) return memoryCsrfToken
   const match = document.cookie.match(/(?:^|;\s*)_csrf=([^;]*)/)
     ?? document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)
   return match ? decodeURIComponent(match[1]) : null
@@ -113,7 +116,12 @@ async function request<T>(
   }
 
   if (res.status === 204) return undefined as T
-  return res.json()
+
+  const data = await res.json()
+  if (data && typeof data === 'object' && 'csrfToken' in data && typeof data.csrfToken === 'string') {
+    memoryCsrfToken = data.csrfToken
+  }
+  return data
 }
 
 function get<T>(path: string) {

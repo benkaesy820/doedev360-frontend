@@ -10,6 +10,63 @@ export function useAdminUsers(params?: {
   role?: string
   search?: string
 }) {
+  const queryClient = useQueryClient()
+
+  useEffect(() => {
+    const socket = getSocket()
+    if (!socket) return
+
+    const handleUserRegistered = (data: { user: { id: string; email: string; name: string; status: Status; createdAt: number } }) => {
+      // Add the new user to the top of the first page
+      queryClient.setQueriesData<InfiniteData<{ success: boolean; users: User[]; hasMore: boolean }>>(
+        { queryKey: ['admin', 'users'] },
+        (old) => {
+          if (!old) return old
+          // Only add if it doesn't already exist to prevent dupes
+          const exists = old.pages.some(p => p.users.some(u => u.id === data.user.id))
+          if (exists) return old
+
+          const newUser: User = {
+            ...data.user,
+            role: 'USER',
+            mediaPermission: false,
+            emailNotifyOnMessage: true,
+          }
+
+          return {
+            ...old,
+            pages: old.pages.map((p, i) => i === 0 ? { ...p, users: [newUser, ...p.users] } : p)
+          }
+        }
+      )
+    }
+
+    const handleStatusChanged = (data: { userId: string; status: Status; reason?: string }) => {
+      queryClient.setQueriesData<InfiniteData<{ success: boolean; users: User[]; hasMore: boolean }>>(
+        { queryKey: ['admin', 'users'] },
+        (old) => {
+          if (!old) return old
+          return {
+            ...old,
+            pages: old.pages.map((p) => ({
+              ...p,
+              users: p.users.map((u) => u.id === data.userId ? { ...u, status: data.status } : u)
+            }))
+          }
+        }
+      )
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users', data.userId] })
+    }
+
+    socket.on('admin:user_registered', handleUserRegistered)
+    socket.on('user:status_changed', handleStatusChanged)
+
+    return () => {
+      socket.off('admin:user_registered', handleUserRegistered)
+      socket.off('user:status_changed', handleStatusChanged)
+    }
+  }, [queryClient])
+
   return useInfiniteQuery({
     queryKey: ['admin', 'users', params],
     queryFn: ({ pageParam }) =>
@@ -39,7 +96,7 @@ export function useUpdateUserStatus() {
     mutationFn: ({ userId, status, reason }: { userId: string; status: Status; reason?: string }) =>
       adminUsers.updateStatus(userId, { status, reason }),
     onSuccess: (_data, variables) => {
-      queryClient.setQueriesData<InfiniteData<{ success: boolean; users: Array<{ id: string; status: string; [key: string]: unknown }>; hasMore: boolean }>>(
+      queryClient.setQueriesData<InfiniteData<{ success: boolean; users: Array<{ id: string; status: string;[key: string]: unknown }>; hasMore: boolean }>>(
         { queryKey: ['admin', 'users'] },
         (old) => {
           if (!old) return old
@@ -71,7 +128,7 @@ export function useUpdateMediaPermission() {
     mutationFn: ({ userId, mediaPermission }: { userId: string; mediaPermission: boolean }) =>
       adminUsers.updateMediaPermission(userId, { mediaPermission }),
     onSuccess: (_data, variables) => {
-      queryClient.setQueriesData<InfiniteData<{ success: boolean; users: Array<{ id: string; mediaPermission?: boolean; [key: string]: unknown }>; hasMore: boolean }>>(
+      queryClient.setQueriesData<InfiniteData<{ success: boolean; users: Array<{ id: string; mediaPermission?: boolean;[key: string]: unknown }>; hasMore: boolean }>>(
         { queryKey: ['admin', 'users'] },
         (old) => {
           if (!old) return old
